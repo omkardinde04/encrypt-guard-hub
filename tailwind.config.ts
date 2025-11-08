@@ -47,6 +47,18 @@ export default {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
+        secure: {
+          DEFAULT: "hsl(var(--secure))",
+          foreground: "hsl(var(--secure-foreground))",
+        },
+        warning: {
+          DEFAULT: "hsl(var(--warning))",
+          foreground: "hsl(var(--warning-foreground))",
+        },
+        encrypted: {
+          DEFAULT: "hsl(var(--encrypted))",
+          foreground: "hsl(var(--encrypted-foreground))",
+        },
         sidebar: {
           DEFAULT: "hsl(var(--sidebar-background))",
           foreground: "hsl(var(--sidebar-foreground))",

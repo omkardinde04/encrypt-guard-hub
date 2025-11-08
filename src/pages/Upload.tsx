@@ -1,0 +1,179 @@
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Shield, Upload as UploadIcon, FileText, Lock, CheckCircle, ArrowLeft } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { toast } from "sonner";
+
+const Upload = () => {
+  const navigate = useNavigate();
+  const [file, setFile] = useState<File | null>(null);
+  const [isEncrypting, setIsEncrypting] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      setFile(e.target.files[0]);
+    }
+  };
+
+  const handleUpload = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    
+    if (!file) {
+      toast.error("Please select a file to upload");
+      return;
+    }
+
+    setIsEncrypting(true);
+    
+    // Simulate encryption
+    setTimeout(() => {
+      setIsEncrypting(false);
+      setIsUploading(true);
+      
+      // Simulate upload
+      setTimeout(() => {
+        toast.success("File encrypted and uploaded successfully!");
+        navigate("/dashboard");
+      }, 1500);
+    }, 2000);
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted">
+      {/* Header */}
+      <header className="border-b border-border bg-card/50 backdrop-blur-sm">
+        <div className="container mx-auto px-4 py-4 flex items-center gap-3">
+          <Button variant="ghost" size="sm" onClick={() => navigate("/dashboard")}>
+            <ArrowLeft className="w-4 h-4" />
+          </Button>
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+              <Shield className="w-6 h-6 text-primary" />
+            </div>
+            <div>
+              <h1 className="text-xl font-bold">Upload File</h1>
+              <p className="text-xs text-muted-foreground">Encrypted before upload</p>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <div className="container mx-auto px-4 py-8 max-w-3xl">
+        <Card>
+          <CardHeader>
+            <CardTitle>Secure File Upload</CardTitle>
+            <CardDescription>
+              Files are automatically encrypted with AES-256 before being stored
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleUpload} className="space-y-6">
+              {/* File Upload */}
+              <div className="space-y-2">
+                <Label htmlFor="file">Select File</Label>
+                <div className="border-2 border-dashed border-border rounded-lg p-8 text-center hover:border-primary/50 transition-colors">
+                  <input
+                    id="file"
+                    type="file"
+                    onChange={handleFileChange}
+                    className="hidden"
+                  />
+                  <label htmlFor="file" className="cursor-pointer">
+                    <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
+                      <UploadIcon className="w-8 h-8 text-primary" />
+                    </div>
+                    <p className="text-sm font-medium mb-1">
+                      {file ? file.name : "Click to select file"}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {file ? `${(file.size / 1024 / 1024).toFixed(2)} MB` : "Maximum file size: 50MB"}
+                    </p>
+                  </label>
+                </div>
+              </div>
+
+              {/* Description */}
+              <div className="space-y-2">
+                <Label htmlFor="description">Description (Optional)</Label>
+                <Textarea
+                  id="description"
+                  placeholder="Add a description for this file..."
+                  rows={3}
+                />
+              </div>
+
+              {/* Encryption Info */}
+              <div className="bg-muted/50 border border-border rounded-lg p-4 space-y-3">
+                <div className="flex items-center gap-2 font-medium">
+                  <Shield className="w-5 h-5 text-primary" />
+                  Security Features
+                </div>
+                <div className="space-y-2 text-sm">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle className="w-4 h-4 text-secure" />
+                    <span>AES-256 encryption applied</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <CheckCircle className="w-4 h-4 text-secure" />
+                    <span>Encrypted in-transit with HTTPS</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <CheckCircle className="w-4 h-4 text-secure" />
+                    <span>Activity logged for audit trail</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Upload Status */}
+              {(isEncrypting || isUploading) && (
+                <div className="bg-primary/10 border border-primary/20 rounded-lg p-4">
+                  <div className="flex items-center gap-3">
+                    <div className="animate-spin">
+                      <Lock className="w-5 h-5 text-primary" />
+                    </div>
+                    <div>
+                      <p className="font-medium text-primary">
+                        {isEncrypting ? "Encrypting file..." : "Uploading..."}
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        {isEncrypting 
+                          ? "Applying AES-256 encryption" 
+                          : "Uploading encrypted file to secure vault"}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Submit Button */}
+              <div className="flex gap-3">
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  onClick={() => navigate("/dashboard")}
+                  className="flex-1"
+                >
+                  Cancel
+                </Button>
+                <Button 
+                  type="submit" 
+                  disabled={!file || isEncrypting || isUploading}
+                  className="flex-1"
+                >
+                  {isEncrypting || isUploading ? "Processing..." : "Encrypt & Upload"}
+                </Button>
+              </div>
+            </form>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+};
+
+export default Upload;

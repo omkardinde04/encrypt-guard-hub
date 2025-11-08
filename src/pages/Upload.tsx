@@ -7,9 +7,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Shield, Upload as UploadIcon, FileText, Lock, CheckCircle, ArrowLeft } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
+import { useAuth } from "@/hooks/useAuth";
 
 const Upload = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [file, setFile] = useState<File | null>(null);
   const [isEncrypting, setIsEncrypting] = useState(false);
   const [isUploading, setIsUploading] = useState(false);

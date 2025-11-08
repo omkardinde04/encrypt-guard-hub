@@ -5,9 +5,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Shield, FileText, Upload, Search, Lock, Edit, Trash2, Download, LogOut } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/hooks/useAuth";
 
 const Dashboard = () => {
   const navigate = useNavigate();
+  const { signOut } = useAuth();
   const [searchQuery, setSearchQuery] = useState("");
 
   // Mock data - will be replaced with real data from Lovable Cloud
@@ -17,7 +19,8 @@ const Dashboard = () => {
     { id: 3, name: "Security_Audit_Log.txt", size: "456 KB", encrypted: true, uploadedAt: "2024-01-13" },
   ];
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    await signOut();
     navigate("/auth");
   };
 

@@ -4,9 +4,11 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Shield, Users, Activity, FileText, ArrowLeft, AlertTriangle } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/hooks/useAuth";
 
 const Admin = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
 
   // Mock data
   const users = [

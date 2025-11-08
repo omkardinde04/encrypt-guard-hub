@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -7,10 +7,19 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Shield, Mail, Lock, User } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
+import { useAuth } from "@/hooks/useAuth";
 
 const Auth = () => {
   const navigate = useNavigate();
+  const { signIn, signUp, user } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
+
+  // Redirect if already logged in
+  useEffect(() => {
+    if (user) {
+      navigate("/dashboard");
+    }
+  }, [user, navigate]);
 
   const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -20,12 +29,15 @@ const Auth = () => {
     const email = formData.get("email") as string;
     const password = formData.get("password") as string;
 
-    // TODO: Implement actual authentication with Lovable Cloud
-    setTimeout(() => {
+    const { error } = await signIn(email, password);
+    
+    if (error) {
+      toast.error(error.message || "Login failed");
+      setIsLoading(false);
+    } else {
       toast.success("Login successful!");
       navigate("/dashboard");
-      setIsLoading(false);
-    }, 1000);
+    }
   };
 
   const handleRegister = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -37,11 +49,15 @@ const Auth = () => {
     const email = formData.get("email") as string;
     const password = formData.get("password") as string;
 
-    // TODO: Implement actual registration with Lovable Cloud
-    setTimeout(() => {
-      toast.success("Registration successful! Please login.");
+    const { error } = await signUp(email, password, name);
+    
+    if (error) {
+      toast.error(error.message || "Registration failed");
       setIsLoading(false);
-    }, 1000);
+    } else {
+      toast.success("Registration successful! You can now login.");
+      navigate("/dashboard");
+    }
   };
 
   return (

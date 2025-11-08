@@ -25,9 +25,6 @@ const Admin = () => {
 
       const usersWithDetails = await Promise.all(
         profiles.map(async (profile) => {
-          // Get user's email from auth metadata
-          const { data: { user: authUser } } = await supabase.auth.admin.getUserById(profile.id);
-          
           // Get user's roles
           const { data: roles } = await supabase
             .from('user_roles')
@@ -51,7 +48,7 @@ const Admin = () => {
           return {
             id: profile.id,
             name: profile.full_name || 'Unknown User',
-            email: authUser?.email || 'N/A',
+            email: `User ID: ${profile.id.slice(0, 8)}...`,
             role: roles?.[0]?.role || 'user',
             filesCount: filesCount || 0,
             lastActive: lastActivity?.[0]?.created_at 
@@ -77,7 +74,7 @@ const Admin = () => {
       
       if (error) throw error;
 
-      // Get user emails for the logs
+      // Get user names for the logs
       const logsWithUsers = await Promise.all(
         data.map(async (log) => {
           if (!log.user_id) {
@@ -91,13 +88,11 @@ const Admin = () => {
             .from('profiles')
             .select('full_name')
             .eq('id', log.user_id)
-            .single();
-
-          const { data: { user: authUser } } = await supabase.auth.admin.getUserById(log.user_id);
+            .maybeSingle();
 
           return {
             ...log,
-            userEmail: authUser?.email || profile?.full_name || 'Unknown'
+            userEmail: profile?.full_name || 'Unknown User'
           };
         })
       );

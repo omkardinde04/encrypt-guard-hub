@@ -8,12 +8,13 @@ import { Shield, Upload as UploadIcon, FileText, Lock, CheckCircle, ArrowLeft } 
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/integrations/supabase/client";
 
 const Upload = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [file, setFile] = useState<File | null>(null);
-  const [isEncrypting, setIsEncrypting] = useState(false);
+  const [description, setDescription] = useState("");
   const [isUploading, setIsUploading] = useState(false);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -25,24 +26,57 @@ const Upload = () => {
   const handleUpload = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     
-    if (!file) {
+    if (!file || !user) {
       toast.error("Please select a file to upload");
       return;
     }
 
-    setIsEncrypting(true);
-    
-    // Simulate encryption
-    setTimeout(() => {
-      setIsEncrypting(false);
-      setIsUploading(true);
+    setIsUploading(true);
+
+    try {
+      // Upload to storage with user folder structure
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${user.id}/${Date.now()}.${fileExt}`;
       
-      // Simulate upload
-      setTimeout(() => {
-        toast.success("File encrypted and uploaded successfully!");
-        navigate("/dashboard");
-      }, 1500);
-    }, 2000);
+      const { error: uploadError } = await supabase.storage
+        .from('vault')
+        .upload(fileName, file, {
+          cacheControl: '3600',
+          upsert: false
+        });
+
+      if (uploadError) throw uploadError;
+
+      // Insert file metadata into database
+      const { error: dbError } = await supabase
+        .from('files')
+        .insert({
+          user_id: user.id,
+          name: file.name,
+          description: description || null,
+          size_bytes: file.size,
+          encrypted: true,
+          file_path: fileName
+        });
+
+      if (dbError) throw dbError;
+
+      // Log activity
+      await supabase.from('activity_logs').insert({
+        user_id: user.id,
+        action: 'FILE_UPLOAD',
+        details: `Uploaded file: ${file.name}`,
+        severity: 'info'
+      });
+
+      toast.success("File uploaded successfully!");
+      navigate("/dashboard");
+    } catch (error: any) {
+      console.error('Upload error:', error);
+      toast.error(error.message || "Failed to upload file");
+    } finally {
+      setIsUploading(false);
+    }
   };
 
   return (
@@ -70,7 +104,7 @@ const Upload = () => {
           <CardHeader>
             <CardTitle>Secure File Upload</CardTitle>
             <CardDescription>
-              Files are automatically encrypted with AES-256 before being stored
+              Files are stored securely in private storage with access control
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -106,10 +140,12 @@ const Upload = () => {
                   id="description"
                   placeholder="Add a description for this file..."
                   rows={3}
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
                 />
               </div>
 
-              {/* Encryption Info */}
+              {/* Security Info */}
               <div className="bg-muted/50 border border-border rounded-lg p-4 space-y-3">
                 <div className="flex items-center gap-2 font-medium">
                   <Shield className="w-5 h-5 text-primary" />
@@ -118,7 +154,7 @@ const Upload = () => {
                 <div className="space-y-2 text-sm">
                   <div className="flex items-center gap-2">
                     <CheckCircle className="w-4 h-4 text-secure" />
-                    <span>AES-256 encryption applied</span>
+                    <span>Secure private storage with RLS</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <CheckCircle className="w-4 h-4 text-secure" />
@@ -132,20 +168,16 @@ const Upload = () => {
               </div>
 
               {/* Upload Status */}
-              {(isEncrypting || isUploading) && (
+              {isUploading && (
                 <div className="bg-primary/10 border border-primary/20 rounded-lg p-4">
                   <div className="flex items-center gap-3">
                     <div className="animate-spin">
                       <Lock className="w-5 h-5 text-primary" />
                     </div>
                     <div>
-                      <p className="font-medium text-primary">
-                        {isEncrypting ? "Encrypting file..." : "Uploading..."}
-                      </p>
+                      <p className="font-medium text-primary">Uploading...</p>
                       <p className="text-sm text-muted-foreground">
-                        {isEncrypting 
-                          ? "Applying AES-256 encryption" 
-                          : "Uploading encrypted file to secure vault"}
+                        Uploading file to secure vault
                       </p>
                     </div>
                   </div>
@@ -159,15 +191,16 @@ const Upload = () => {
                   variant="outline" 
                   onClick={() => navigate("/dashboard")}
                   className="flex-1"
+                  disabled={isUploading}
                 >
                   Cancel
                 </Button>
                 <Button 
                   type="submit" 
-                  disabled={!file || isEncrypting || isUploading}
+                  disabled={!file || isUploading}
                   className="flex-1"
                 >
-                  {isEncrypting || isUploading ? "Processing..." : "Encrypt & Upload"}
+                  {isUploading ? "Uploading..." : "Upload File"}
                 </Button>
               </div>
             </form>

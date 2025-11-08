@@ -38,11 +38,82 @@ const Dashboard = () => {
     }
   };
 
-  const handleDelete = async (fileId: string) => {
+  const handleDelete = async (fileId: string, filePath: string, fileName: string) => {
+    if (!confirm(`Are you sure you want to delete "${fileName}"?`)) return;
+
+    try {
+      // Delete from storage first
+      const { error: storageError } = await supabase.storage
+        .from('vault')
+        .remove([filePath]);
+
+      if (storageError) throw storageError;
+
+      // Delete from database
+      const { error: dbError } = await supabase
+        .from('files')
+        .delete()
+        .eq('id', fileId);
+
+      if (dbError) throw dbError;
+
+      // Log activity
+      await supabase.from('activity_logs').insert({
+        user_id: user?.id,
+        action: 'FILE_DELETE',
+        details: `Deleted file: ${fileName}`,
+        severity: 'warning'
+      });
+
+      toast.success("File deleted successfully");
+      loadFiles();
+    } catch (error: any) {
+      console.error('Delete error:', error);
+      toast.error("Failed to delete file");
+    }
+  };
+
+  const handleDownload = async (filePath: string, fileName: string) => {
+    try {
+      const { data, error } = await supabase.storage
+        .from('vault')
+        .download(filePath);
+
+      if (error) throw error;
+
+      // Create download link
+      const url = window.URL.createObjectURL(data);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+
+      // Log activity
+      await supabase.from('activity_logs').insert({
+        user_id: user?.id,
+        action: 'FILE_DOWNLOAD',
+        details: `Downloaded file: ${fileName}`,
+        severity: 'info'
+      });
+
+      toast.success("File downloaded successfully");
+    } catch (error: any) {
+      console.error('Download error:', error);
+      toast.error("Failed to download file");
+    }
+  };
+
+  const handleEdit = async (fileId: string, currentName: string, currentDescription: string | null) => {
+    const newName = prompt("Enter new file name:", currentName);
+    if (!newName || newName === currentName) return;
+
     try {
       const { error } = await supabase
         .from('files')
-        .delete()
+        .update({ name: newName })
         .eq('id', fileId);
 
       if (error) throw error;
@@ -50,15 +121,16 @@ const Dashboard = () => {
       // Log activity
       await supabase.from('activity_logs').insert({
         user_id: user?.id,
-        action: 'FILE_DELETE',
-        details: `Deleted file`,
-        severity: 'warning'
+        action: 'FILE_UPDATE',
+        details: `Renamed file from "${currentName}" to "${newName}"`,
+        severity: 'info'
       });
 
-      toast.success("File deleted successfully");
+      toast.success("File renamed successfully");
       loadFiles();
     } catch (error: any) {
-      toast.error("Failed to delete file");
+      console.error('Edit error:', error);
+      toast.error("Failed to update file");
     }
   };
 
@@ -209,16 +281,27 @@ const Dashboard = () => {
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      <Button variant="ghost" size="sm">
+                      <Button 
+                        variant="ghost" 
+                        size="sm"
+                        onClick={() => handleDownload(file.file_path, file.name)}
+                        title="Download file"
+                      >
                         <Download className="w-4 h-4" />
                       </Button>
-                      <Button variant="ghost" size="sm">
+                      <Button 
+                        variant="ghost" 
+                        size="sm"
+                        onClick={() => handleEdit(file.id, file.name, file.description)}
+                        title="Rename file"
+                      >
                         <Edit className="w-4 h-4" />
                       </Button>
                       <Button 
                         variant="ghost" 
                         size="sm"
-                        onClick={() => handleDelete(file.id)}
+                        onClick={() => handleDelete(file.id, file.file_path, file.name)}
+                        title="Delete file"
                       >
                         <Trash2 className="w-4 h-4" />
                       </Button>

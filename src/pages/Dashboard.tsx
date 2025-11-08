@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -6,22 +6,68 @@ import { Badge } from "@/components/ui/badge";
 import { Shield, FileText, Upload, Search, Lock, Edit, Trash2, Download, LogOut } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
 const Dashboard = () => {
   const navigate = useNavigate();
-  const { signOut } = useAuth();
+  const { user, signOut } = useAuth();
   const [searchQuery, setSearchQuery] = useState("");
+  const [files, setFiles] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  // Mock data - will be replaced with real data from Lovable Cloud
-  const files = [
-    { id: 1, name: "Financial_Report_2024.pdf", size: "2.4 MB", encrypted: true, uploadedAt: "2024-01-15" },
-    { id: 2, name: "User_Database_Backup.sql", size: "15.8 MB", encrypted: true, uploadedAt: "2024-01-14" },
-    { id: 3, name: "Security_Audit_Log.txt", size: "456 KB", encrypted: true, uploadedAt: "2024-01-13" },
-  ];
+  useEffect(() => {
+    if (user) {
+      loadFiles();
+    }
+  }, [user]);
+
+  const loadFiles = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('files')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setFiles(data || []);
+    } catch (error: any) {
+      toast.error("Failed to load files");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDelete = async (fileId: string) => {
+    try {
+      const { error } = await supabase
+        .from('files')
+        .delete()
+        .eq('id', fileId);
+
+      if (error) throw error;
+
+      // Log activity
+      await supabase.from('activity_logs').insert({
+        user_id: user?.id,
+        action: 'FILE_DELETE',
+        details: `Deleted file`,
+        severity: 'warning'
+      });
+
+      toast.success("File deleted successfully");
+      loadFiles();
+    } catch (error: any) {
+      toast.error("Failed to delete file");
+    }
+  };
 
   const handleLogout = async () => {
-    await signOut();
-    navigate("/auth");
+    try {
+      await signOut();
+    } catch (error: any) {
+      toast.error("Failed to sign out");
+    }
   };
 
   return (
@@ -56,7 +102,7 @@ const Dashboard = () => {
           <Card>
             <CardHeader className="pb-3">
               <CardDescription>Total Files</CardDescription>
-              <CardTitle className="text-3xl">24</CardTitle>
+              <CardTitle className="text-3xl">{files.length}</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="flex items-center text-sm text-muted-foreground">
@@ -69,7 +115,9 @@ const Dashboard = () => {
           <Card>
             <CardHeader className="pb-3">
               <CardDescription>Storage Used</CardDescription>
-              <CardTitle className="text-3xl">156 MB</CardTitle>
+              <CardTitle className="text-3xl">
+                {(files.reduce((acc, f) => acc + (f.size_bytes || 0), 0) / 1024 / 1024).toFixed(2)} MB
+              </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="flex items-center text-sm text-muted-foreground">
@@ -121,45 +169,64 @@ const Dashboard = () => {
             <CardDescription>All files are encrypted with AES-256 before storage</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              {files.map((file) => (
-                <div
-                  key={file.id}
-                  className="flex items-center justify-between p-4 border border-border rounded-lg hover:bg-muted/50 transition-colors"
-                >
-                  <div className="flex items-center gap-4 flex-1">
-                    <div className="w-10 h-10 rounded-lg bg-encrypted/10 flex items-center justify-center">
-                      <FileText className="w-5 h-5 text-encrypted" />
-                    </div>
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <h3 className="font-medium">{file.name}</h3>
-                        {file.encrypted && (
-                          <Badge variant="outline" className="text-xs">
-                            <Lock className="w-3 h-3 mr-1" />
-                            Encrypted
-                          </Badge>
-                        )}
+            {loading ? (
+              <div className="text-center py-8">
+                <p className="text-muted-foreground">Loading files...</p>
+              </div>
+            ) : files.length === 0 ? (
+              <div className="text-center py-8">
+                <FileText className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                <p className="text-muted-foreground mb-4">No files uploaded yet</p>
+                <Button onClick={() => navigate("/upload")}>
+                  <Upload className="w-4 h-4 mr-2" />
+                  Upload Your First File
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {files.map((file) => (
+                  <div
+                    key={file.id}
+                    className="flex items-center justify-between p-4 border border-border rounded-lg hover:bg-muted/50 transition-colors"
+                  >
+                    <div className="flex items-center gap-4 flex-1">
+                      <div className="w-10 h-10 rounded-lg bg-encrypted/10 flex items-center justify-center">
+                        <FileText className="w-5 h-5 text-encrypted" />
                       </div>
-                      <p className="text-sm text-muted-foreground">
-                        {file.size} • Uploaded {file.uploadedAt}
-                      </p>
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-1">
+                          <h3 className="font-medium">{file.name}</h3>
+                          {file.encrypted && (
+                            <Badge variant="outline" className="text-xs">
+                              <Lock className="w-3 h-3 mr-1" />
+                              Encrypted
+                            </Badge>
+                          )}
+                        </div>
+                        <p className="text-sm text-muted-foreground">
+                          {(file.size_bytes / 1024 / 1024).toFixed(2)} MB • Uploaded {new Date(file.created_at).toLocaleDateString()}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button variant="ghost" size="sm">
+                        <Download className="w-4 h-4" />
+                      </Button>
+                      <Button variant="ghost" size="sm">
+                        <Edit className="w-4 h-4" />
+                      </Button>
+                      <Button 
+                        variant="ghost" 
+                        size="sm"
+                        onClick={() => handleDelete(file.id)}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Button variant="ghost" size="sm">
-                      <Download className="w-4 h-4" />
-                    </Button>
-                    <Button variant="ghost" size="sm">
-                      <Edit className="w-4 h-4" />
-                    </Button>
-                    <Button variant="ghost" size="sm">
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>

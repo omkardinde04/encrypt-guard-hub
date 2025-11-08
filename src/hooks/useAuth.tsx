@@ -1,35 +1,48 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from "react";
+import { createContext, useContext, useEffect, useState } from "react";
 import { User, Session } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
+import { toast } from "sonner";
 
 interface AuthContextType {
   user: User | null;
   session: Session | null;
   loading: boolean;
-  signUp: (email: string, password: string, fullName: string) => Promise<{ error: any }>;
-  signIn: (email: string, password: string) => Promise<{ error: any }>;
+  signUp: (email: string, password: string, fullName: string) => Promise<void>;
+  signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export const AuthProvider = ({ children }: { children: ReactNode }) => {
+export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
 
   useEffect(() => {
-    // Set up auth state listener FIRST
+    // Set up auth state listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
         setSession(session);
         setUser(session?.user ?? null);
-        setLoading(false);
+        
+        // Log activity asynchronously without blocking
+        if (session?.user && event === 'SIGNED_IN') {
+          setTimeout(() => {
+            supabase.from('activity_logs').insert({
+              user_id: session.user.id,
+              action: 'LOGIN',
+              details: 'User logged in',
+              severity: 'info'
+            }).then();
+          }, 0);
+        }
       }
     );
 
-    // THEN check for existing session
+    // Check for existing session
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setUser(session?.user ?? null);
@@ -40,19 +53,22 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   const signUp = async (email: string, password: string, fullName: string) => {
-    const redirectUrl = `${window.location.origin}/dashboard`;
+    const redirectUrl = `${window.location.origin}/`;
     
-    const { error } = await supabase.auth.signUp({
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
         emailRedirectTo: redirectUrl,
         data: {
-          full_name: fullName,
+          full_name: fullName
         }
       }
     });
-    return { error };
+
+    if (error) throw error;
+    
+    toast.success("Account created successfully! You can now login.");
   };
 
   const signIn = async (email: string, password: string) => {
@@ -60,11 +76,29 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       email,
       password,
     });
-    return { error };
+
+    if (error) throw error;
+    
+    toast.success("Signed in successfully!");
+    navigate("/dashboard");
   };
 
   const signOut = async () => {
-    await supabase.auth.signOut();
+    // Log activity before signing out
+    if (user) {
+      await supabase.from('activity_logs').insert({
+        user_id: user.id,
+        action: 'LOGOUT',
+        details: 'User logged out',
+        severity: 'info'
+      });
+    }
+    
+    const { error } = await supabase.auth.signOut();
+    if (error) throw error;
+    
+    toast.success("Signed out successfully!");
+    navigate("/auth");
   };
 
   return (

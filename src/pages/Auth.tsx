@@ -29,14 +29,12 @@ const Auth = () => {
     const email = formData.get("email") as string;
     const password = formData.get("password") as string;
 
-    const { error } = await signIn(email, password);
-    
-    if (error) {
-      toast.error(error.message || "Login failed");
+    try {
+      await signIn(email, password);
+    } catch (error: any) {
+      toast.error(error.message || "Failed to sign in");
+    } finally {
       setIsLoading(false);
-    } else {
-      toast.success("Login successful!");
-      navigate("/dashboard");
     }
   };
 
@@ -49,14 +47,15 @@ const Auth = () => {
     const email = formData.get("email") as string;
     const password = formData.get("password") as string;
 
-    const { error } = await signUp(email, password, name);
-    
-    if (error) {
-      toast.error(error.message || "Registration failed");
+    try {
+      await signUp(email, password, name);
+      // Switch to login tab
+      const loginTab = document.querySelector('[value="login"]') as HTMLButtonElement;
+      loginTab?.click();
+    } catch (error: any) {
+      toast.error(error.message || "Failed to create account");
+    } finally {
       setIsLoading(false);
-    } else {
-      toast.success("Registration successful! You can now login.");
-      navigate("/dashboard");
     }
   };
 

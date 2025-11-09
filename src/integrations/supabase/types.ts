@@ -49,6 +49,7 @@ export type Database = {
           file_path: string
           id: string
           name: string
+          password_hash: string | null
           size_bytes: number
           updated_at: string
           user_id: string
@@ -60,6 +61,7 @@ export type Database = {
           file_path: string
           id?: string
           name: string
+          password_hash?: string | null
           size_bytes: number
           updated_at?: string
           user_id: string
@@ -71,6 +73,7 @@ export type Database = {
           file_path?: string
           id?: string
           name?: string
+          password_hash?: string | null
           size_bytes?: number
           updated_at?: string
           user_id?: string

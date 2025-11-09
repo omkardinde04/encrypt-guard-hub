@@ -3,11 +3,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Shield, FileText, Upload, Search, Lock, Edit, Trash2, Download, LogOut } from "lucide-react";
+import { Shield, FileText, Upload, Search, Lock, Edit, Trash2, Download, LogOut, Eye } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { ThemeToggle } from "@/components/ThemeToggle";
+import { PasswordDialog } from "@/components/PasswordDialog";
+import { FilePreviewDialog } from "@/components/FilePreviewDialog";
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -15,6 +18,17 @@ const Dashboard = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [files, setFiles] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
+  const [previewDialogOpen, setPreviewDialogOpen] = useState(false);
+  const [currentAction, setCurrentAction] = useState<{
+    type: 'download' | 'preview' | 'edit';
+    file: any;
+  } | null>(null);
+  const [previewFile, setPreviewFile] = useState<{
+    name: string;
+    url: string;
+    type?: string;
+  } | null>(null);
 
   useEffect(() => {
     if (user) {
@@ -73,7 +87,52 @@ const Dashboard = () => {
     }
   };
 
-  const handleDownload = async (filePath: string, fileName: string) => {
+  const verifyPassword = async (file: any, inputPassword: string): Promise<boolean> => {
+    if (!file.password_hash) return true;
+
+    // Hash the input password
+    const encoder = new TextEncoder();
+    const data = encoder.encode(inputPassword);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    const inputHash = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+
+    return inputHash === file.password_hash;
+  };
+
+  const handlePasswordSubmit = async (password: string) => {
+    if (!currentAction) return;
+
+    const isValid = await verifyPassword(currentAction.file, password);
+    if (!isValid) {
+      toast.error("Incorrect password");
+      return;
+    }
+
+    setPasswordDialogOpen(false);
+
+    // Execute the action
+    if (currentAction.type === 'download') {
+      await executeDownload(currentAction.file.file_path, currentAction.file.name);
+    } else if (currentAction.type === 'preview') {
+      await executePreview(currentAction.file);
+    } else if (currentAction.type === 'edit') {
+      await executeEdit(currentAction.file.id, currentAction.file.name, currentAction.file.description);
+    }
+
+    setCurrentAction(null);
+  };
+
+  const handleDownload = async (file: any) => {
+    if (file.password_hash) {
+      setCurrentAction({ type: 'download', file });
+      setPasswordDialogOpen(true);
+    } else {
+      await executeDownload(file.file_path, file.name);
+    }
+  };
+
+  const executeDownload = async (filePath: string, fileName: string) => {
     try {
       const { data, error } = await supabase.storage
         .from('vault')
@@ -106,7 +165,53 @@ const Dashboard = () => {
     }
   };
 
-  const handleEdit = async (fileId: string, currentName: string, currentDescription: string | null) => {
+  const handlePreview = async (file: any) => {
+    if (file.password_hash) {
+      setCurrentAction({ type: 'preview', file });
+      setPasswordDialogOpen(true);
+    } else {
+      await executePreview(file);
+    }
+  };
+
+  const executePreview = async (file: any) => {
+    try {
+      const { data, error } = await supabase.storage
+        .from('vault')
+        .download(file.file_path);
+
+      if (error) throw error;
+
+      const url = window.URL.createObjectURL(data);
+      setPreviewFile({
+        name: file.name,
+        url: url,
+      });
+      setPreviewDialogOpen(true);
+
+      // Log activity
+      await supabase.from('activity_logs').insert({
+        user_id: user?.id,
+        action: 'FILE_VIEW',
+        details: `Previewed file: ${file.name}`,
+        severity: 'info'
+      });
+    } catch (error: any) {
+      console.error('Preview error:', error);
+      toast.error("Failed to preview file");
+    }
+  };
+
+  const handleEdit = async (file: any) => {
+    if (file.password_hash) {
+      setCurrentAction({ type: 'edit', file });
+      setPasswordDialogOpen(true);
+    } else {
+      await executeEdit(file.id, file.name, file.description);
+    }
+  };
+
+  const executeEdit = async (fileId: string, currentName: string, currentDescription: string | null) => {
     const newName = prompt("Enter new file name:", currentName);
     if (!newName || newName === currentName) return;
 
@@ -157,6 +262,7 @@ const Dashboard = () => {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <ThemeToggle />
             <Button variant="outline" size="sm" onClick={() => navigate("/admin")}>
               Admin Panel
             </Button>
@@ -284,7 +390,15 @@ const Dashboard = () => {
                       <Button 
                         variant="ghost" 
                         size="sm"
-                        onClick={() => handleDownload(file.file_path, file.name)}
+                        onClick={() => handlePreview(file)}
+                        title="Preview file"
+                      >
+                        <Eye className="w-4 h-4" />
+                      </Button>
+                      <Button 
+                        variant="ghost" 
+                        size="sm"
+                        onClick={() => handleDownload(file)}
                         title="Download file"
                       >
                         <Download className="w-4 h-4" />
@@ -292,7 +406,7 @@ const Dashboard = () => {
                       <Button 
                         variant="ghost" 
                         size="sm"
-                        onClick={() => handleEdit(file.id, file.name, file.description)}
+                        onClick={() => handleEdit(file)}
                         title="Rename file"
                       >
                         <Edit className="w-4 h-4" />
@@ -313,6 +427,26 @@ const Dashboard = () => {
           </CardContent>
         </Card>
       </div>
+
+      {/* Password Dialog */}
+      <PasswordDialog
+        open={passwordDialogOpen}
+        onOpenChange={setPasswordDialogOpen}
+        onSubmit={handlePasswordSubmit}
+      />
+
+      {/* Preview Dialog */}
+      <FilePreviewDialog
+        open={previewDialogOpen}
+        onOpenChange={(open) => {
+          setPreviewDialogOpen(open);
+          if (!open && previewFile) {
+            window.URL.revokeObjectURL(previewFile.url);
+            setPreviewFile(null);
+          }
+        }}
+        file={previewFile}
+      />
     </div>
   );
 };

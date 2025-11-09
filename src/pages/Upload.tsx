@@ -9,12 +9,15 @@ import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
+import { Checkbox } from "@/components/ui/checkbox";
 
 const Upload = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [file, setFile] = useState<File | null>(null);
   const [description, setDescription] = useState("");
+  const [password, setPassword] = useState("");
+  const [isPasswordProtected, setIsPasswordProtected] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -28,6 +31,11 @@ const Upload = () => {
     
     if (!file || !user) {
       toast.error("Please select a file to upload");
+      return;
+    }
+
+    if (isPasswordProtected && !password) {
+      toast.error("Please enter a password for protection");
       return;
     }
 
@@ -47,6 +55,17 @@ const Upload = () => {
 
       if (uploadError) throw uploadError;
 
+      // Hash password if protection is enabled
+      let passwordHash = null;
+      if (isPasswordProtected && password) {
+        // Simple hash for demo - in production use bcrypt or similar
+        const encoder = new TextEncoder();
+        const data = encoder.encode(password);
+        const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+        const hashArray = Array.from(new Uint8Array(hashBuffer));
+        passwordHash = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+      }
+
       // Insert file metadata into database
       const { error: dbError } = await supabase
         .from('files')
@@ -56,7 +75,8 @@ const Upload = () => {
           description: description || null,
           size_bytes: file.size,
           encrypted: true,
-          file_path: fileName
+          file_path: fileName,
+          password_hash: passwordHash
         });
 
       if (dbError) throw dbError;
@@ -143,6 +163,47 @@ const Upload = () => {
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                 />
+              </div>
+
+              {/* Password Protection */}
+              <div className="space-y-4">
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="password-protection"
+                    checked={isPasswordProtected}
+                    onCheckedChange={(checked) => {
+                      setIsPasswordProtected(checked as boolean);
+                      if (!checked) setPassword("");
+                    }}
+                  />
+                  <Label
+                    htmlFor="password-protection"
+                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                  >
+                    Enable password protection (optional)
+                  </Label>
+                </div>
+                
+                {isPasswordProtected && (
+                  <div className="space-y-2">
+                    <Label htmlFor="file-password">File Password</Label>
+                    <div className="relative">
+                      <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        id="file-password"
+                        type="password"
+                        placeholder="Enter password for this file"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        className="pl-10"
+                        required={isPasswordProtected}
+                      />
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      This password will be required to view, download, or edit the file
+                    </p>
+                  </div>
+                )}
               </div>
 
               {/* Security Info */}

@@ -21,7 +21,7 @@ const Dashboard = () => {
   const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
   const [previewDialogOpen, setPreviewDialogOpen] = useState(false);
   const [currentAction, setCurrentAction] = useState<{
-    type: 'download' | 'preview' | 'edit';
+    type: 'download' | 'preview' | 'edit' | 'delete';
     file: any;
   } | null>(null);
   const [previewFile, setPreviewFile] = useState<{
@@ -52,9 +52,18 @@ const Dashboard = () => {
     }
   };
 
-  const handleDelete = async (fileId: string, filePath: string, fileName: string) => {
-    if (!confirm(`Are you sure you want to delete "${fileName}"?`)) return;
+  const handleDelete = async (file: any) => {
+    if (!confirm(`Are you sure you want to delete "${file.name}"?`)) return;
 
+    if (file.password_hash) {
+      setCurrentAction({ type: 'delete', file });
+      setPasswordDialogOpen(true);
+    } else {
+      await executeDelete(file.id, file.file_path, file.name);
+    }
+  };
+
+  const executeDelete = async (fileId: string, filePath: string, fileName: string) => {
     try {
       // Delete from storage first
       const { error: storageError } = await supabase.storage
@@ -118,6 +127,8 @@ const Dashboard = () => {
       await executePreview(currentAction.file);
     } else if (currentAction.type === 'edit') {
       await executeEdit(currentAction.file.id, currentAction.file.name, currentAction.file.description);
+    } else if (currentAction.type === 'delete') {
+      await executeDelete(currentAction.file.id, currentAction.file.file_path, currentAction.file.name);
     }
 
     setCurrentAction(null);
@@ -414,7 +425,7 @@ const Dashboard = () => {
                       <Button 
                         variant="ghost" 
                         size="sm"
-                        onClick={() => handleDelete(file.id, file.file_path, file.name)}
+                        onClick={() => handleDelete(file)}
                         title="Delete file"
                       >
                         <Trash2 className="w-4 h-4" />
